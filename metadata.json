@@ -1,0 +1,4 @@
+{
+  "name": "UniSchedule Optimizer",
+  "description": "An intelligent timetable generator for CSIT students that optimizes for fewest campus days and filters based on senior teacher recommendations."
+}

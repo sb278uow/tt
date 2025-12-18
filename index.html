@@ -1,45 +1,398 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="https://lucide.dev/logo.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UniSchedule Optimizer</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                50: '#eff6ff',
-                100: '#dbeafe',
-                500: '#3b82f6',
-                600: '#2563eb',
-                700: '#1d4ed8',
-                900: '#1e3a8a',
-              }
-            }
-          }
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UOWD Timetable Generator</title>
+    <style>
+        :root {
+            --primary: #002e5d;
+            --accent: #d32f2f;
+            --bg: #f4f4f9;
+            --text: #333;
         }
-      }
-    </script>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "clsx": "https://esm.sh/clsx@^2.1.1",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.0"
-  }
-}
-</script>
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; }
+        .container { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 350px 1fr; gap: 20px; }
+        
+        /* Sidebar Styles */
+        .sidebar { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); height: fit-content; }
+        h1 { color: var(--primary); margin-top: 0; font-size: 1.5rem; }
+        h2 { font-size: 1.1rem; margin-bottom: 10px; color: var(--primary); }
+        
+        textarea { width: 100%; height: 150px; font-size: 0.8rem; border: 1px solid #ccc; padding: 5px; box-sizing: border-box; resize: vertical; }
+        input[type="text"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; margin-bottom: 10px; }
+        
+        .subject-list { max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 5px; margin-bottom: 15px; }
+        .subject-item { display: flex; align-items: center; padding: 5px; font-size: 0.9rem; }
+        .subject-item:hover { background: #f0f0f0; }
+        .subject-item input { margin-right: 10px; }
+        
+        button { background: var(--primary); color: white; border: none; padding: 12px; width: 100%; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #004a94; }
+        button.secondary { background: #666; margin-top: 10px; }
+
+        /* Main Content */
+        .main-content { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .status-bar { padding: 10px; background: #e3f2fd; color: #0d47a1; border-radius: 4px; margin-bottom: 20px; display: none; }
+        
+        .schedule-card { border: 1px solid #ddd; margin-bottom: 20px; border-radius: 6px; overflow: hidden; }
+        .schedule-header { background: #eee; padding: 10px 15px; display: flex; justify-content: space-between; font-weight: bold; border-bottom: 1px solid #ddd; }
+        .schedule-stats { color: #555; font-size: 0.9rem; }
+        
+        .timetable { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .timetable th { background: var(--primary); color: white; padding: 8px; font-size: 0.9rem; width: 100px; }
+        .timetable td { border: 1px solid #eee; padding: 0; vertical-align: top; height: 40px; }
+        
+        /* Grid System for Time Slots */
+        .day-column { position: relative; height: 100%; min-height: 50px; }
+        .class-block {
+            padding: 4px; font-size: 0.75rem; border-radius: 3px; border-left: 3px solid var(--primary);
+            background: #e3f2fd; color: #000; margin: 1px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .class-block strong { display: block; color: var(--primary); }
+        
+        .pref-match { border-left-color: #2e7d32; background: #e8f5e9; } /* Green for preferred teacher */
+        
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+    </style>
 </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
-  </body>
+<body>
+
+<div class="container">
+    <!-- Sidebar for Inputs -->
+    <div class="sidebar">
+        <h1>UOWD Scheduler</h1>
+        
+        <label><strong>1. Raw Timetable Data</strong></label>
+        <textarea id="rawInput" placeholder="Paste the text copied from the timetable viewer here..."></textarea>
+        <button class="secondary" onclick="parseData()" style="padding: 5px; font-size: 0.8rem;">Refresh Subjects</button>
+        <br><br>
+
+        <label><strong>2. Select Subjects</strong></label>
+        <div class="subject-list" id="subjectList">
+            <div style="padding:10px; color:#666;">Paste data and click Refresh...</div>
+        </div>
+
+        <label><strong>3. Teacher Preferences</strong></label>
+        <input type="text" id="teacherPref" placeholder="e.g. Khairul, Soly (comma separated)">
+        
+        <label><strong>4. Preferences</strong></label>
+        <div style="margin-bottom: 15px; font-size: 0.9rem;">
+            <label><input type="checkbox" id="noFri"> Avoid Fridays</label><br>
+            <label><input type="checkbox" id="noMon"> Avoid Mondays</label>
+        </div>
+
+        <button onclick="generate()">Generate Timetable</button>
+    </div>
+
+    <!-- Main Output -->
+    <div class="main-content">
+        <div id="status" class="status-bar"></div>
+        <div id="results">
+            <p style="text-align: center; color: #888; margin-top: 50px;">
+                Generated timetables will appear here.<br>
+                Based on minimum days on campus & teacher preferences.
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global store for parsed subjects
+    let parsedSubjects = {}; 
+
+    // Pre-load the textarea with the data provided in the prompt for demo purposes
+    // (In a real deployment, you might want to leave this empty or load from a file)
+    const DEMO_DATA = `Subject Code: ACCY122
+Lecture Monday 10:30 12:30 0.17-Lecture Theatre Khairul Kamarudin
+OR Lecture Wednesday 10:30 12:30 0.17-Lecture Theatre Khairul Kamarudin
+OR Lecture Wednesday 12:30 14:30 0.17-Lecture Theatre Khairul Kamarudin
+AND Tutorial Monday 12:30 14:30 3.42-Classroom B Khairul Kamarudin
+OR Tutorial Tuesday 16:30 18:30 4.48-Classroom B Alfiya Thaha
+Subject Code: CSIT110
+Lecture Monday 08:30 11:30 6.345-Classroom A 6.34 & 6.35 Soly Mathew
+OR Lecture Tuesday 08:30 11:30 6.345-Classroom A 6.34 & 6.35 Soly Mathew
+AND Computer Lab Tuesday 08:30 10:30 6.40-Computer Lab Pradnya Bhagwat
+OR Computer Lab Monday 12:30 14:30 1.52-Computer Lab Single Salma Zalkha
+Subject Code: MARK101
+Lecture Tuesday 08:30 10:30 6.32-Classroom B Dina Elnidani
+OR Lecture Wednesday 08:30 10:30 6.345-Classroom A 6.34 & 6.35 Dina Elnidani
+AND Tutorial Thursday 08:30 10:30 4.48-Classroom B Umme Kalsoom
+OR Tutorial Friday 08:30 10:30 2.64-Block 19 Umme Kalsoom`;
+
+    window.onload = function() {
+        // Check if user has data, if not load demo
+        if(!document.getElementById('rawInput').value) {
+            document.getElementById('rawInput').value = DEMO_DATA;
+        }
+        parseData();
+    }
+
+    // --- 1. PARSING LOGIC ---
+    function parseData() {
+        const text = document.getElementById('rawInput').value;
+        const lines = text.split('\n').filter(l => l.trim() !== '');
+        
+        parsedSubjects = {};
+        let currentSubject = null;
+        let currentGroup = null; // To handle "AND" vs "OR" logic
+        
+        // Regex to find time pattern (e.g., 10:30 12:30)
+        // Groups: 1=Type prefix, 2=Day, 3=Start, 4=End, 5=Rest (Room+Teacher)
+        const classRegex = /^(.*?)\s+(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(.*)$/i;
+
+        lines.forEach(line => {
+            line = line.trim();
+
+            // 1. Detect Subject Header
+            if (line.startsWith('Subject Code:')) {
+                const parts = line.split(':');
+                const code = parts[1].trim().split(' ')[0]; // Take first word "ACCY122"
+                currentSubject = code;
+                parsedSubjects[currentSubject] = [];
+                currentGroup = null;
+                return;
+            }
+
+            if (!currentSubject) return;
+
+            // 2. Parse Class Line
+            const match = line.match(classRegex);
+            if (match) {
+                let [_, prefix, day, startStr, endStr, details] = match;
+                prefix = prefix.trim();
+                
+                // Determine Logic (AND vs OR)
+                // If line starts with "AND", it's a NEW requirement.
+                // If line starts with "OR", it's an option for the CURRENT requirement.
+                // If neither (usually first line), it's a NEW requirement.
+                
+                const isAnd = prefix.startsWith('AND');
+                const isOr = prefix.startsWith('OR');
+                
+                // Clean up Type Name (remove AND/OR)
+                let typeName = prefix.replace(/^(AND|OR)\s+/, '').trim();
+                if (!typeName) typeName = "Class"; // Fallback
+
+                // Separation logic
+                if (isAnd || !currentGroup || (!isOr && !isAnd && parsedSubjects[currentSubject].length === 0)) {
+                    // Start new group
+                    currentGroup = [];
+                    parsedSubjects[currentSubject].push(currentGroup);
+                } else if (!isOr && !isAnd && parsedSubjects[currentSubject].length > 0) {
+                    // Edge case: formatting might miss AND, but if structure implies new activity
+                    // For safety, let's assume strict AND/OR. If missing, assume new group if type changes?
+                    // For this specific data format, strictly relying on AND/OR or first line seems safest.
+                }
+
+                // Parse Time
+                const start = timeToFloat(startStr);
+                const end = timeToFloat(endStr);
+
+                // Parse Teacher/Room (Heuristic: Teacher is usually at the end)
+                // UOWD Rooms often start with digits e.g., 1.14 or 0.17
+                // Let's just store the whole string for display
+                const teacher = extractTeacher(details);
+
+                currentGroup.push({
+                    subject: currentSubject,
+                    type: typeName,
+                    day: day,
+                    start: start,
+                    end: end,
+                    details: details,
+                    teacher: teacher
+                });
+            }
+        });
+
+        renderSubjectList();
+    }
+
+    function extractTeacher(details) {
+        // Heuristic: Teachers are usually names at the end. Rooms are codes at start.
+        // We'll assume the last 2-3 words might be the teacher, or just search for prefs in the whole string.
+        return details; 
+    }
+
+    function timeToFloat(timeStr) {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h + (m / 60);
+    }
+
+    function renderSubjectList() {
+        const container = document.getElementById('subjectList');
+        container.innerHTML = '';
+        
+        Object.keys(parsedSubjects).forEach(sub => {
+            const div = document.createElement('div');
+            div.className = 'subject-item';
+            div.innerHTML = `<label><input type="checkbox" value="${sub}" checked> <strong>${sub}</strong> <span style="font-size:0.8em; color:#666">(${parsedSubjects[sub].length} components)</span></label>`;
+            container.appendChild(div);
+        });
+    }
+
+    // --- 2. GENERATION LOGIC ---
+    function generate() {
+        const selectedSubs = Array.from(document.querySelectorAll('#subjectList input:checked')).map(cb => cb.value);
+        if (selectedSubs.length === 0) {
+            alert("Please select at least one subject.");
+            return;
+        }
+
+        const statusEl = document.getElementById('status');
+        statusEl.style.display = 'block';
+        statusEl.innerText = 'Calculating combinations...';
+
+        // Flatten all required components from selected subjects
+        // Structure: [ [Option1, Option2], [Option1, Option2] ... ]
+        let allGroups = [];
+        selectedSubs.forEach(sub => {
+            if (parsedSubjects[sub]) {
+                parsedSubjects[sub].forEach(group => {
+                    allGroups.push(group);
+                });
+            }
+        });
+
+        // Cartesian Product with Conflict Check
+        setTimeout(() => {
+            const validSchedules = [];
+            
+            function backtrack(groupIndex, currentSchedule) {
+                // Success base case
+                if (groupIndex === allGroups.length) {
+                    validSchedules.push([...currentSchedule]);
+                    return;
+                }
+                
+                // Limit exhaustive search if too massive
+                if (validSchedules.length > 5000) return; 
+
+                const options = allGroups[groupIndex];
+                
+                for (let opt of options) {
+                    if (!hasConflict(currentSchedule, opt)) {
+                        currentSchedule.push(opt);
+                        backtrack(groupIndex + 1, currentSchedule);
+                        currentSchedule.pop();
+                    }
+                }
+            }
+
+            backtrack(0, []);
+
+            // Scoring
+            const teacherPrefs = document.getElementById('teacherPref').value.toLowerCase().split(',').map(s=>s.trim()).filter(s=>s);
+            const avoidMon = document.getElementById('noMon').checked;
+            const avoidFri = document.getElementById('noFri').checked;
+
+            const scored = validSchedules.map(sch => {
+                const days = new Set(sch.map(c => c.day));
+                let teacherScore = 0;
+                
+                sch.forEach(c => {
+                    if (teacherPrefs.some(p => c.details.toLowerCase().includes(p))) {
+                        teacherScore++; // Higher is better
+                    }
+                });
+
+                let penalty = 0;
+                if (avoidMon && days.has("Monday")) penalty += 10;
+                if (avoidFri && days.has("Friday")) penalty += 10;
+
+                // Primary Goal: Min Days. Secondary: Max Teacher Score.
+                return {
+                    schedule: sch,
+                    dayCount: days.size,
+                    teacherScore: teacherScore,
+                    penalty: penalty,
+                    score: (days.size * 100) - teacherScore + penalty
+                };
+            });
+
+            // Sort (Lowest score wins)
+            scored.sort((a, b) => a.score - b.score);
+
+            renderResults(scored.slice(0, 20)); // Show top 20
+            statusEl.innerText = `Found ${validSchedules.length} combinations. Showing top ${Math.min(20, validSchedules.length)}.`;
+        }, 50);
+    }
+
+    function hasConflict(schedule, cls) {
+        return schedule.some(existing => 
+            existing.day === cls.day && 
+            Math.max(existing.start, cls.start) < Math.min(existing.end, cls.end)
+        );
+    }
+
+    // --- 3. RENDERING ---
+    function renderResults(results) {
+        const container = document.getElementById('results');
+        container.innerHTML = '';
+        
+        if (results.length === 0) {
+            container.innerHTML = '<p>No non-clashing timetables found. Try selecting fewer subjects.</p>';
+            return;
+        }
+
+        const teacherPrefs = document.getElementById('teacherPref').value.toLowerCase().split(',').map(s=>s.trim());
+
+        results.forEach((res, idx) => {
+            const sch = res.schedule;
+            const uniqueDays = [...new Set(sch.map(s => s.day))].join(', ');
+            
+            const div = document.createElement('div');
+            div.className = 'schedule-card';
+            
+            let html = `
+                <div class="schedule-header">
+                    <span>Option #${idx + 1}</span>
+                    <span class="schedule-stats">${res.dayCount} Days (${uniqueDays}) | Teacher Matches: ${res.teacherScore}</span>
+                </div>
+                <div style="padding:10px; overflow-x:auto;">
+                    <table class="timetable">
+                        <thead>
+                            <tr>
+                                <th>Monday</th><th>Tuesday</th><th>Wednesday</th><th>Thursday</th><th>Friday</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+            `;
+            
+            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+            days.forEach(day => {
+                html += `<td>`;
+                // Sort classes by time
+                const dayClasses = sch.filter(s => s.day === day).sort((a,b) => a.start - b.start);
+                
+                dayClasses.forEach(c => {
+                    const isPref = teacherPrefs.some(p => p && c.details.toLowerCase().includes(p));
+                    html += `
+                        <div class="class-block ${isPref ? 'pref-match' : ''}">
+                            <strong>${c.subject} (${c.type})</strong>
+                            ${formatTime(c.start)} - ${formatTime(c.end)}<br>
+                            <span style="font-size:0.7em; color:#555">${c.details}</span>
+                        </div>
+                    `;
+                });
+                html += `</td>`;
+            });
+
+            html += `</tr></tbody></table></div>`;
+            div.innerHTML = html;
+            container.appendChild(div);
+        });
+    }
+
+    function formatTime(val) {
+        const h = Math.floor(val);
+        const m = Math.round((val - h) * 60);
+        return `${h}:${m < 10 ? '0' : ''}${m}`;
+    }
+</script>
+
+</body>
 </html>
